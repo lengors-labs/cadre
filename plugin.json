@@ -3,7 +3,13 @@
   "name": "cadre",
   "description": "Organization development agents and the issue-to-PR workflow.",
   "version": "0.0.0",
-  "author": { "name": "lengors-labs" },
+  "author": {
+    "name": "lengors-labs"
+  },
   "license": "Unlicense",
-  "keywords": ["agents", "workflow", "copilot"]
+  "keywords": [
+    "agents",
+    "workflow",
+    "copilot"
+  ]
 }
