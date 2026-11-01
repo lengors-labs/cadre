@@ -17,7 +17,9 @@ this repository usable as a template.
   request conventions, issue and pull request linking policy, and Git/GitHub
   safety rules.
 - `.releaserc.js` — the release pipeline: gitmoji commits become versions,
-  changelogs and GitHub releases.
+  changelogs and GitHub releases; see [The release commit](#the-release-commit).
+- `tools/release-manifests.js` — local semantic-release plugin that writes the
+  version into the manifests; `node --test tools/*.test.js` covers it.
 - `.github/workflows/publish-new-version.yml` — GitHub Actions workflow that runs it.
 - `.github/CODEOWNERS` — default code owners for the repository.
 
@@ -47,7 +49,8 @@ longer reach generated projects.
 4. Adjust `.github/CODEOWNERS` if the maintainers differ from the defaults.
 5. Add the secrets the release workflow needs to the `publisher` environment:
    `GH_APP_ID` and `GH_PRIVATE_KEY` for the GitHub App that performs the release.
-   The workflow signs nothing, so no GPG key is required.
+   The App installation needs the **Contents: write** permission; no GPG key is
+   required, because GitHub signs the release commit itself.
 6. Update the **Project** section of `AGENTS.md` with the description, package
    manager, and any globally relevant scripts of the new project.
 
@@ -71,10 +74,32 @@ Topic branches are cut from `rc`; promoting `rc` into `main` produces the final
 release. Pushing to a topic branch does nothing — its preview is published on demand
 from the Actions tab, which is useful for trying a build without cutting an `rc`.
 
-The bump is derived from the commit's gitmoji, the changelog and GitHub release are
-generated from the same commits, and the version lives in the git tag — nothing is
-written into a file. See the comment block at the end of [`.releaserc.js`](./.releaserc.js)
-for how a language template adds its own build tool to the pipeline.
+The bump is derived from the commit's gitmoji, and the changelog and GitHub release
+are generated from the same commits. See the comment block at the end of
+[`.releaserc.js`](./.releaserc.js) for how a language template adds its own build
+tool to the pipeline.
+
+### The release commit
+
+Each release bumps the manifests — `plugin.json` and the matching entry of
+`marketplace.json` — in a single commit, in two `prepare` steps:
+
+1. `tools/release-manifests.js` — a local plugin — writes the resolved version into
+   both files.
+2. `@jno21/semantic-release-github-commit` commits them through the GitHub REST API
+   with no author or committer supplied, which is what makes GitHub attribute the
+   commit to the App installation and **sign it**.
+
+No GPG key is involved, and the workflow deliberately sets no
+`GIT_AUTHOR_*`/`GIT_COMMITTER_*` variables: any explicit identity silently
+downgrades the commit to an unverified one. The plugin then fetches the commit back
+and moves the local clone onto it — semantic-release creates the tag from `gitHead`
+*after* the prepare step, so a commit that only existed on the server would leave the
+tag pointing at the pre-bump commit.
+
+That plugin also leaves the App token in `.git/config` and `.git/FETCH_HEAD`, which
+is why the workflow ends with a step that removes it. On a hosted runner the
+workspace is discarded; on a cached or self-hosted one it would not be.
 
 ## Contributing
 
