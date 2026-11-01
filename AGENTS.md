@@ -8,11 +8,14 @@ cannot supply — code owners, license, README, these instructions and the relea
 pipeline — and is consumed through GitHub's "Use this template" feature rather than
 by branching.
 
-No package manager or build system. Changes are Markdown, YAML and one JavaScript
-configuration file for semantic-release; there is no test suite. Verify a change by
-reviewing the rendered Markdown and by parsing the YAML and JavaScript for syntax
-errors (`node --check .releaserc.js`), and, when references are touched, by following
-the linked paths in the `lengors-labs` organization.
+No package manager or build system. Changes are Markdown, YAML and three
+JavaScript files: the semantic-release configuration, the local release plugin
+under `tools/`, and the plugin's tests. There is nothing to install — the remote
+release plugins are installed by the workflow — and no build step. Verify a change
+by reviewing the rendered Markdown, by parsing the YAML and JavaScript for syntax
+errors (`node --check .releaserc.js tools/*.js`), by running the tests
+(`node --test tools/*.test.js`), and, when references are touched, by following the
+linked paths in the `lengors-labs` organization.
 
 Note: every generated repository starts from this content, so treat edits here as
 changes to the baseline of all future projects. Keep files generic — nothing specific
@@ -108,13 +111,40 @@ command that needs it, and undo it afterwards.
 
 `.releaserc.js` derives the bump from the gitmoji table above and publishes a GitHub
 release on every push to `main` and `rc`, so `rc` yields `x.y.z-rc.n` and `main`
-yields the final version. The version lives in the git tag; do not bump or edit
-versions by hand, and do not edit `CHANGELOG` files or tags.
+yields the final version. The version lives in the git tag and in the two manifests
+— `plugin.json` and the matching entry in `marketplace.json` — which the release
+pipeline writes; do not bump or edit either by hand, and do not edit `CHANGELOG`
+files or tags.
 
 A manual dispatch of the same workflow publishes a preview from a `feat/`, `bug/` or
 `chore/` branch — `x.y.z-preview-<branch>.1`, on the `preview` channel. That is the
-only way those branches release; pushing to them does nothing. Nothing is committed
-by any of these runs, so a preview leaves only a tag and a release behind.
+only way those branches release; pushing to them does nothing.
+
+### The release commit
+
+Two `prepare` steps, in this order, because `prepare` runs in the order the
+`plugins` array lists them:
+
+1. **`tools/release-manifests.js`** — a local plugin, loaded by path — writes the
+   resolved version into the manifests listed in its `files` option. It takes the
+   same `files` shape as the commit plugin below, so the two steps read as one
+   description of what the release commit contains. Every file is validated
+   before any is written, so a malformed manifest aborts with the checkout
+   untouched.
+2. **`@jno21/semantic-release-github-commit`** commits those files through the
+   GitHub REST API. This is deliberately **not** a local `git commit`: with no author
+   or committer supplied, GitHub attributes the commit to the App installation and
+   signs it. That is why the workflow imports no GPG key and why `GIT_AUTHOR_*` and
+   `GIT_COMMITTER_*` must never be set for the release step — any supplied identity
+   silently downgrades the commit to an unverified one. The plugin then fetches the
+   commit back and moves local `HEAD` onto it, because semantic-release tags
+   `nextRelease.gitHead` *after* `prepare`; skip that and the tag would point at the
+   pre-bump commit.
+
+The plugin rewrites `remote.origin.url` with the installation token and never
+reverts it, so the workflow scrubs `.git/config` and `.git/FETCH_HEAD` in an
+`always()` step. Do not remove that step: it is the only thing keeping a live
+credential out of a checkout that can outlive the job.
 
 Promotion is a merge of `rc` into `main`, and the repository's branch rules make it
 the one place drift is resolved: `rc` must contain `main` before it can be promoted,
