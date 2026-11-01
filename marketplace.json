@@ -1,0 +1,5 @@
+{
+  "name": "lengors-labs",
+  "owner": { "name": "lengors-labs" },
+  "plugins": [{ "name": "cadre", "source": "./", "version": "0.0.0" }]
+}
