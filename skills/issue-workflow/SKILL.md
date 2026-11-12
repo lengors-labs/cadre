@@ -221,3 +221,137 @@ requested. Report whether all task-list items are complete or give the remaining
 count and list, plus any blockers or incomplete publication/PR configuration.
 Leave the worktree in place for follow-up; remove it only when explicitly
 requested and permitted by `AGENTS.md`.
+
+## Reference: local Git procedures
+
+These examples are optional implementations of the requirements above, not a
+substitute for them. Use equivalent operations when appropriate. They require Git
+and a shell; the normalization example additionally requires Python 3. Run them
+only with the required capability and authorization, in the validated repository
+or worktree. Repository guidance and safety restrictions take precedence. Stop
+and report failures; do not discard or stage unrelated work. Variables below are
+validated values supplied by the workflow, not literal placeholders to execute.
+
+### Primary checkout and configured root
+
+In Bash, read the first NUL-delimited worktree record without splitting spaces or
+newlines in its path. The first entry is the main worktree, which may be bare or
+unavailable; confirm it is an accessible checkout before relying on it.
+
+```bash
+if ! IFS= read -r -d '' entry < <(git worktree list --porcelain -z); then
+  printf '%s\n' 'Cannot read worktree metadata' >&2; exit 1
+fi
+case "$entry" in
+  'worktree '*) primary=${entry#worktree } ;;
+  *) printf '%s\n' 'Cannot identify the primary worktree' >&2; exit 1 ;;
+esac
+test "$(git -C "$primary" rev-parse --is-inside-work-tree)" = true || exit 1
+git -C "$primary" config --path --get cadre.agentWorktreeDir
+```
+
+The last operation returns status 1 when the key is absent: ask for a root then.
+Other errors are not evidence that the key is unset; stop and report them.
+Validate that the returned or supplied root is absolute after Git path expansion.
+Do not create a worktree from an invalid or ambiguous location.
+
+### Identity and publishing
+
+Before each commit, inspect both effective identities, including any environment
+overrides. Do not print credential values.
+
+```bash
+git var GIT_AUTHOR_IDENT
+git var GIT_COMMITTER_IDENT
+```
+
+After validating `remote` and `branch`, checking for unexpected remote advancement,
+and committing and verifying the changes, a normal push can establish upstream:
+
+```bash
+git push --set-upstream "$remote" "HEAD:refs/heads/$branch" || exit 1
+git rev-parse --verify 'HEAD^{commit}' || exit 1
+git ls-remote --exit-code --refs "$remote" "refs/heads/$branch" || exit 1
+```
+
+Compare the two commit IDs and verify the returned ref is exactly the validated
+branch. A successful local tracking-ref lookup alone does not establish the actual
+remote state. These commands do not authorize a force-push.
+
+### Normalize staged index modes
+
+Use this fallback only on an unreliable-mode filesystem when no applicable
+repository procedure is provided. Stage and review only intended changes first;
+the example deliberately does not stage files. Set `BASE` to the verified base
+commit ID. It processes staged additions, modifications, and type changes, handles
+NUL-delimited paths, skips deleted and non-regular index entries, and preserves
+base regular-file modes. New regular files use the staged blob's shebang. It does
+not infer intentional mode changes: record and apply those overrides afterwards.
+It changes the index, so inspect the staged diff before and after. Stop if the
+index has unresolved entries or any command fails.
+
+```bash
+export BASE  # already set to the verified base commit ID
+python3 - <<'PY'
+import os
+import subprocess
+
+def git(*args):
+    return subprocess.run([b"git", *args], check=True, stdout=subprocess.PIPE).stdout
+
+base = os.environb[b"BASE"]
+git(b"rev-parse", b"--verify", base + b"^{commit}")
+tree = {}
+for record in git(b"ls-tree", b"-rz", b"--full-tree", base).split(b"\0"):
+    if record:
+        meta, path = record.split(b"\t", 1)
+        tree[path] = meta.split(b" ", 1)[0]
+
+index = {}
+for record in git(b"ls-files", b"--stage", b"-z").split(b"\0"):
+    if record:
+        meta, path = record.split(b"\t", 1)
+        mode, oid, stage = meta.split(b" ")
+        if stage != b"0":
+            raise SystemExit("Unmerged index entries; resolve them before normalization")
+        index[path] = (mode, oid)
+
+changed = git(b"diff", b"--cached", b"--no-ext-diff", b"--no-renames",
+              b"--diff-filter=ACMT", b"--name-only", b"-z").split(b"\0")
+for path in filter(None, changed):
+    mode, oid = index[path]
+    if mode not in (b"100644", b"100755"):
+        continue
+    base_mode = tree.get(path)
+    if base_mode in (b"100644", b"100755"):
+        executable = base_mode == b"100755"
+    else:
+        with subprocess.Popen([b"git", b"cat-file", b"blob", oid],
+                              stdout=subprocess.PIPE) as proc:
+            prefix = proc.stdout.read(2)
+            while proc.stdout.read(65536):
+                pass
+            if proc.wait() != 0:
+                raise SystemExit("Cannot read staged blob")
+        executable = prefix == b"#!"
+    desired = b"100755" if executable else b"100644"
+    if mode != desired:
+        git(b"update-index", b"--chmod=+x" if executable else b"--chmod=-x",
+            b"--", path)
+PY
+```
+
+Apply intended exceptions explicitly to each validated index path; for example,
+use `git update-index --chmod=+x -- "$path"` or the `--chmod=-x` counterpart.
+Inspect the complete staged diff and the executable index entries with
+`git ls-files --stage -z`; compare them to base modes, staged shebangs, and the
+recorded overrides. The NUL-delimited output must be parsed as records, not as
+whitespace-separated columns. If a file was renamed, treat the destination as a
+new path and explicitly override its mode if necessary.
+
+If an **unpushed** tip commit needs a mode repair, first ensure there are no
+unrelated staged changes, set the intended index mode, then amend only if the
+repository and safety rules permit. For earlier unpushed commits, use a reviewed
+history-rewrite procedure only when authorized, preserving unrelated work; do not
+use a blanket rebase command that ignores failures. If this cannot be done safely,
+stop and report the blocker. Do not repair filesystem mode noise with `chmod`.
