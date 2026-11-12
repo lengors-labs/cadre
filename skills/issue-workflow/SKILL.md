@@ -75,9 +75,16 @@ creation capability if a suitable workspace is not already available.
 - Otherwise, continue in the current workspace only if it is demonstrably the
   correct isolated issue workspace. If not, create the required branch/worktree
   from the up-to-date resolved base, following `AGENTS.md` (including any further
-  synchronization requirements). Use its prescribed worktree location, or, if
-  none is prescribed, `~/Documents/Projects/agent-workspace/<owner>/<repo>/agent-<issue_number>`.
-  Immediately confirm the new branch is synchronized as required.
+  synchronization requirements). Resolve its location as follows, then immediately
+  confirm the new branch is synchronized as required:
+  - Use the location prescribed by `AGENTS.md` if it provides one.
+  - Otherwise read `cadre.agentWorktreeDir` as a path from the primary checkout's
+    effective Git configuration. Git path handling expands `~`, but not arbitrary
+    environment variables. Require an absolute path after expansion; if it is
+    unset or invalid, ask the user for an absolute root rather than guessing.
+  - Under that configured or user-supplied root, use
+    `<owner>/<repo>/agent-<issue_number>`. Do not modify Git configuration unless
+    explicitly requested. A suitable supplied or current worktree needs no root.
 - If an unvalidated intended branch already exists locally or remotely, its
   workspace or ownership is uncertain, its issue/base context is mismatched, or
   the workspace has unrelated changes, do not overwrite, delete, or repurpose it.
