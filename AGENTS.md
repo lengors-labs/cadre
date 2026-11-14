@@ -127,7 +127,15 @@ left to rot.
 When creating any pull request:
 - Title format: 🔀 Merge `origin/<source_branch>` into `origin/<target_branch>` (backtick the branch refs, exactly this wording).
 - Body: leave **empty** — do not pass a body.
-- Assignee: set to yourself — the authenticated account (via `get_me`; if unavailable, resolve from git config user.email via search_users — note noreply emails are NOT indexed by search — or ask for the username instead of guessing). (`create_pull_request` has no assignee parameter and GitHub does not auto-assign authors on API-created PRs — set it post-creation with issue-update tooling.)
+- Assignee: if the head commit's committer and the Git push credential's account
+  can both be authoritatively resolved to the same GitHub user, assign that user.
+  Otherwise assign yourself — the authenticated GitHub MCP account. Resolve it
+  via `get_me`; if unavailable, resolve from git config user.email via search_users
+  — note noreply emails are NOT indexed by search — or ask for the username instead
+  of guessing. Do not infer the pusher from the remote URL, Git email, or MCP
+  identity. (`create_pull_request` has no assignee parameter and GitHub does not
+  auto-assign authors on API-created PRs — set it post-creation with issue-update
+  tooling.)
 
 ## Issue & PR linking
 
