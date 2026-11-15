@@ -18,30 +18,54 @@
  * codepoint, and the plugin silently drops any rule it cannot resolve).
  */
 const SECTIONS = [
-  { title: '💥 Breaking Changes', rules: ['💥'] },
-  { title: '✨ New Features', rules: ['✨'] },
-  { title: '🗑️ Deprecations', rules: ['🗑️'] },
-  { title: '🐛 Bug Fixes', rules: ['🐛', '🚑', '🥅'] },
-  { title: '🔒 Security', rules: ['🔒', '🔐'] },
-  { title: '⚡ Performance', rules: ['⚡'] },
-  { title: '♻️ Refactoring and Style', rules: ['♻️', '💄', '✏️'] },
-  { title: '📦 Dependencies and Build', rules: ['➕', '➖', '⬆️', '⬇️', '📌', '👷‍♂️', '💚', '🍱', '📦'] },
-  { title: '🔧 Configuration and Tooling', rules: ['🔧', '🔊', '🔇', '📱'] },
-  { title: '🔥 Removals', rules: ['🔥'] },
-]
+  { title: "💥 Breaking Changes", rules: ["💥"] },
+  { title: "✨ New Features", rules: ["✨"] },
+  { title: "🗑️ Deprecations", rules: ["🗑️"] },
+  { title: "🐛 Bug Fixes", rules: ["🐛", "🚑", "🥅"] },
+  { title: "🔒 Security", rules: ["🔒", "🔐"] },
+  { title: "⚡ Performance", rules: ["⚡"] },
+  { title: "♻️ Refactoring and Style", rules: ["♻️", "💄", "✏️"] },
+  {
+    title: "📦 Dependencies and Build",
+    rules: ["➕", "➖", "⬆️", "⬇️", "📌", "👷‍♂️", "💚", "🍱", "📦"],
+  },
+  { title: "🔧 Configuration and Tooling", rules: ["🔧", "🔊", "🔇", "📱"] },
+  { title: "🔥 Removals", rules: ["🔥"] },
+];
 
 /**
  * `releaseRules` for `semantic-release-gitmoji`, mapping the gitmoji table in
  * `AGENTS.md` onto release types. Keep the two in sync.
  */
 const RELEASE_RULES = {
-  major: ['💥'],
-  minor: ['✨', '🗑️'],
+  major: ["💥"],
+  minor: ["✨", "🗑️"],
   patch: [
-    '🐛', '✏️', '🔒', '🔐', '🚑', '⚡', '♻️', '💄', '➕', '➖', '⬆️', '⬇️',
-    '📌', '🔧', '👷‍♂️', '💚', '🍱', '📦', '🥅', '🔊', '🔇', '📱', '🔥',
+    "🐛",
+    "✏️",
+    "🔒",
+    "🔐",
+    "🚑",
+    "⚡",
+    "♻️",
+    "💄",
+    "➕",
+    "➖",
+    "⬆️",
+    "⬇️",
+    "📌",
+    "🔧",
+    "👷‍♂️",
+    "💚",
+    "🍱",
+    "📦",
+    "🥅",
+    "🔊",
+    "🔇",
+    "📱",
+    "🔥",
   ],
-}
+};
 
 /**
  * Changelog template replacing the plugin's default, which renders only the
@@ -64,7 +88,7 @@ const RELEASE_NOTES_TEMPLATE = `{{#if compareUrl}}
 - {{> commitTemplate}}
 {{/each}}
 {{/if}}
-{{/each}}`
+{{/each}}`;
 
 /**
  * Flatten the per-emoji commit buckets into ordered sections.
@@ -72,45 +96,62 @@ const RELEASE_NOTES_TEMPLATE = `{{#if compareUrl}}
  * @param {object} commits Map of emoji to commits, as given to the template.
  * @returns {object[]} One entry per section, including empty ones.
  */
-function sections (commits = {}) {
+function sections(commits = {}) {
   return SECTIONS.map(({ title, rules }) => ({
     title,
     commits: rules.flatMap((rule) => commits[rule] ?? []),
-  }))
+  }));
 }
 
-module.exports = {
+export default {
   // `main` holds released code only; `rc` is the long-lived integration branch.
   // The `feat/**`, `bug/**` and `chore/**` entries exist so that a manual
   // dispatch publishes a preview from any of those branches. The `prerelease`
   // strings are templates: semantic-release renders them per matched branch,
   // which is what keeps each preview on its own identifier.
   branches: [
-    'main',
-    { name: 'rc', prerelease: 'rc' },
-    { name: 'feat/**', channel: 'preview', prerelease: 'preview-${name.replace(/^feat\\//, "").replace(/\\//g, "-")}' },
-    { name: 'bug/**', channel: 'preview', prerelease: 'preview-${name.replace(/^bug\\//, "").replace(/\\//g, "-")}' },
-    { name: 'chore/**', channel: 'preview', prerelease: 'preview-${name.replace(/^chore\\//, "").replace(/\\//g, "-")}' },
+    "main",
+    { name: "rc", prerelease: "rc" },
+    {
+      name: "feat/**",
+      channel: "preview",
+      prerelease:
+        'preview-${name.replace(/^feat\\//, "").replace(/\\//g, "-")}',
+    },
+    {
+      name: "bug/**",
+      channel: "preview",
+      prerelease: 'preview-${name.replace(/^bug\\//, "").replace(/\\//g, "-")}',
+    },
+    {
+      name: "chore/**",
+      channel: "preview",
+      prerelease:
+        'preview-${name.replace(/^chore\\//, "").replace(/\\//g, "-")}',
+    },
   ],
 
   // The version lives in the tag and never in a file: this repository has no
   // build tool. Language templates that have one add a `prepare` step, below.
-  tagFormat: 'v${version}',
+  tagFormat: "v${version}",
 
   plugins: [
-    ['semantic-release-gitmoji', {
-      releaseRules: RELEASE_RULES,
-      releaseNotes: {
-        template: RELEASE_NOTES_TEMPLATE,
-        helpers: { sections },
+    [
+      "semantic-release-gitmoji",
+      {
+        releaseRules: RELEASE_RULES,
+        releaseNotes: {
+          template: RELEASE_NOTES_TEMPLATE,
+          helpers: { sections },
+        },
       },
-    }],
+    ],
 
     // Publishes the GitHub release and pushes the tags. The notes generated
     // above become the release body, which is why no `CHANGELOG.md` is written:
     // without `@semantic-release/git` the file would be discarded with the
     // runner, and the release body already carries the same content.
-    '@semantic-release/github',
+    "@semantic-release/github",
 
     // ---------------------------------------------------------------------
     // Adding a build tool (language templates only)
@@ -133,4 +174,4 @@ module.exports = {
     // `@semantic-release/git` must stay last: it commits whatever the preceding
     // `prepare` steps wrote, so its asset list is the final one.
   ],
-}
+};
