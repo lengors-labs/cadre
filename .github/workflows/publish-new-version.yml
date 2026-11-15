@@ -12,8 +12,16 @@ on:
   workflow_dispatch:
 
 jobs:
+  validate:
+    # The reusable workflow runs the same checks as pull requests before any
+    # automatic release or manually dispatched preview can publish.
+    uses: ./.github/workflows/validate.yml
+    permissions:
+      contents: read
+
   publish-new-version:
     name: Publish new version
+    needs: validate
     runs-on: ubuntu-latest
     environment: publisher
     # A dispatch is only meaningful on a topic branch; without this guard the
