@@ -1,0 +1,24 @@
+{
+  "name": "@lengors-labs/cadre",
+  "version": "0.0.0",
+  "description": "OpenCode agents and workflows for software development",
+  "license": "Unlicense",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": ["agents", "skills", "src"],
+  "scripts": {
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.2.6",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}

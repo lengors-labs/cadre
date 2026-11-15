@@ -79,7 +79,7 @@ function sections (commits = {}) {
   }))
 }
 
-module.exports = {
+export default {
   // `main` holds released code only; `rc` is the long-lived integration branch.
   // The `feat/**`, `bug/**` and `chore/**` entries exist so that a manual
   // dispatch publishes a preview from any of those branches. The `prerelease`
