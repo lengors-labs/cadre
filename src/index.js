@@ -1,7 +1,12 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Plugin } from "@opencode/plugin";
-import { loadAgents, loadSkills, registerAgents } from "./definitions.js";
+import {
+  loadAgents,
+  loadSkills,
+  registerAgents,
+  resolveAgentTiers,
+} from "./definitions.js";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -10,7 +15,11 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 export default Plugin.define({
   id: "cadre",
   async setup(ctx) {
-    const agents = await loadAgents(join(root, "agents"));
+    const agents = resolveAgentTiers(
+      await loadAgents(join(root, "agents")),
+      ctx.options,
+      (message) => console.warn(message),
+    );
     const skills = await loadSkills(join(root, "skills"));
     await ctx.agent.transform((editor) => {
       registerAgents(editor, agents);

@@ -14,6 +14,7 @@ import { parseDocument } from "yaml";
  * @property {boolean} explicitMode
  * @property {Permission[]} permissions
  * @property {boolean} disabled
+ * @property {string} [tier]
  * @property {import('@opencode/plugin').Agent.Info['model']} [model]
  * @property {{ headers?: Record<string, string>, body?: Record<string, unknown> }} [request]
  * @property {number} [steps]
@@ -51,7 +52,7 @@ function record(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-/** @param {unknown} value @param {string} path @returns {import('@opencode/plugin').Agent.Info['model']} */
+/** @param {unknown} value @param {string} path @returns {NonNullable<import('@opencode/plugin').Agent.Info['model']>} */
 function parseModel(value, path) {
   let ref;
   if (typeof value === "string") ref = value;
@@ -78,6 +79,7 @@ export function parseAgent(source, path, id = basename(path, ".md")) {
     "description",
     "mode",
     "model",
+    "tier",
     "request",
     "steps",
     "hidden",
@@ -91,6 +93,11 @@ export function parseAgent(source, path, id = basename(path, ".md")) {
   }
   if (a.description !== undefined && typeof a.description !== "string")
     throw new Error(`${path}: invalid description`);
+  if (
+    a.tier !== undefined &&
+    (typeof a.tier !== "string" || !/^[a-z][a-z0-9-]*$/.test(a.tier))
+  )
+    throw new Error(`${path}: invalid tier`);
   const mode = a.mode ?? "primary";
   if (mode !== "subagent" && mode !== "primary" && mode !== "all")
     throw new Error(`${path}: invalid mode`);
@@ -162,6 +169,7 @@ export function parseAgent(source, path, id = basename(path, ".md")) {
     explicitMode: a.mode !== undefined,
     permissions,
     disabled: a.disabled === true,
+    tier: a.tier,
     model: a.model === undefined ? undefined : parseModel(a.model, path),
     request,
     steps: a.steps,
@@ -176,6 +184,9 @@ export function validateCadreAgent(agent, path) {
   if (agent.disabled) return;
   if (!agent.explicitMode)
     throw new Error(`${path}: cadre agents require an explicit mode`);
+  if (!agent.tier) throw new Error(`${path}: cadre agents require a tier`);
+  if (agent.model !== undefined)
+    throw new Error(`${path}: cadre agents must not specify a model`);
   const first = agent.permissions[0];
   if (
     !first ||
@@ -185,6 +196,39 @@ export function validateCadreAgent(agent, path) {
   ) {
     throw new Error(`${path}: cadre permissions must begin with deny-all`);
   }
+}
+
+/**
+ * Resolve tier mappings once, before registering the synchronous transform.
+ * @param {AgentDefinition[]} agents
+ * @param {unknown} options
+ * @param {(message: string) => void} report
+ * @returns {AgentDefinition[]}
+ */
+export function resolveAgentTiers(agents, options, report) {
+  if (options !== undefined && !record(options))
+    throw new Error("cadre: plugin options must be an object");
+  const tiers = options?.tiers;
+  if (tiers !== undefined && !record(tiers))
+    throw new Error("cadre: options.tiers must be an object");
+  /** @type {Map<string, NonNullable<AgentDefinition['model']>>} */
+  const models = new Map();
+  for (const [tier, value] of Object.entries(tiers ?? {})) {
+    if (!/^[a-z][a-z0-9-]*$/.test(tier) || typeof value !== "string")
+      throw new Error(`cadre: invalid mapping for tier ${tier}`);
+    models.set(tier, parseModel(value, `cadre: tier ${tier}`));
+  }
+  return agents.map((agent) => {
+    if (agent.disabled || !agent.tier) return agent;
+    const model = models.get(agent.tier);
+    if (!model) {
+      report(
+        `cadre: agent ${agent.id} has unmapped tier ${agent.tier}; inheriting the session model`,
+      );
+      return { ...agent, model: undefined };
+    }
+    return { ...agent, model };
+  });
 }
 
 /** @param {string} directory @returns {Promise<AgentDefinition[]>} */
