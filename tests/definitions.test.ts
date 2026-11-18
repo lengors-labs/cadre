@@ -11,6 +11,7 @@ import {
   loadSkills,
   parseAgent,
   registerAgents,
+  resolveAgentTiers,
   validateCadreAgent,
 } from "../src/definitions.js";
 
@@ -18,6 +19,7 @@ const worker = `---
 description: Reviews code
 mode: subagent
 model: example/model#high
+tier: review
 steps: 8
 request:
   headers: { X-Test: value }
@@ -31,7 +33,10 @@ Review changes.\n`;
 
 test("reads metadata, request, ordered permissions and explicit worker mode", () => {
   const definition = parseAgent(worker, "/agents/reviewer.md");
-  validateCadreAgent(definition, "reviewer.md");
+  assert.throws(
+    () => validateCadreAgent(definition, "reviewer.md"),
+    /must not specify a model/,
+  );
   assert.equal(definition.mode, "subagent");
   assert.equal(definition.system, "Review changes.");
   const agent: { -readonly [K in keyof Agent.Info]: Agent.Info[K] } =
@@ -76,7 +81,9 @@ test("accepts all documented modes without assigning meaning to the ID", () => {
 
 test("separates supported OpenCode parsing from cadre deny-first validation", () => {
   const parsed = parseAgent(
-    worker.replace('  - { action: "*", resource: "*", effect: deny }\n', ""),
+    worker
+      .replace("model: example/model#high\n", "")
+      .replace('  - { action: "*", resource: "*", effect: deny }\n', ""),
     "reviewer.md",
   );
   assert.throws(() => validateCadreAgent(parsed, "reviewer.md"), /deny-all/);
@@ -110,11 +117,73 @@ test("discovers nested agents and fails if the asset directory is missing", asyn
   const root = await mkdtemp(join(tmpdir(), "cadre-agents-"));
   await assert.rejects(loadAgents(join(root, "absent")), { code: "ENOENT" });
   await mkdir(join(root, "agents", "team"), { recursive: true });
-  await writeFile(join(root, "agents", "team", "reviewer.md"), worker);
+  await writeFile(
+    join(root, "agents", "team", "reviewer.md"),
+    worker.replace("model: example/model#high\n", ""),
+  );
   await writeFile(join(root, "agents", "notes.txt"), "ignored");
   assert.deepEqual(
     (await loadAgents(join(root, "agents"))).map((agent) => agent.id),
     ["team/reviewer"],
+  );
+});
+
+test("resolves tiers once and reports unmapped agents without choosing a model", () => {
+  const source = worker.replace("model: example/model#high\n", "");
+  const agent = parseAgent(source, "reviewer.md");
+  validateCadreAgent(agent, "reviewer.md");
+  const warnings: string[] = [];
+  const resolved = resolveAgentTiers(
+    [agent],
+    { tiers: { review: "example/reasoner#high" } },
+    (message) => warnings.push(message),
+  );
+  assert.deepEqual(resolved[0].model, {
+    providerID: "example",
+    id: "reasoner",
+    variant: "high",
+  });
+  assert.equal(agent.model, undefined);
+  assert.equal(warnings.length, 0);
+  const [unmapped] = resolveAgentTiers([agent], {}, (message) =>
+    warnings.push(message),
+  );
+  assert.equal(unmapped.model, undefined);
+  assert.match(warnings[0], /reviewer.*review.*inheriting/);
+  const draft: { -readonly [K in keyof Agent.Info]: Agent.Info[K] } =
+    Agent.Info.default(Agent.ID.make("reviewer"));
+  applyAgent(draft, unmapped);
+  assert.equal(draft.model, undefined);
+  assert.equal(
+    resolveAgentTiers([{ ...agent, disabled: true }], undefined, () =>
+      assert.fail(),
+    )[0].model,
+    undefined,
+  );
+  assert.throws(
+    () =>
+      resolveAgentTiers([agent], { tiers: { review: "invalid" } }, () => {}),
+    /invalid model/,
+  );
+  assert.throws(
+    () => resolveAgentTiers([agent], { tiers: [] }, () => {}),
+    /options.tiers/,
+  );
+  assert.throws(
+    () =>
+      validateCadreAgent(
+        parseAgent(source.replace("tier: review\n", ""), "reviewer.md"),
+        "reviewer.md",
+      ),
+    /require a tier/,
+  );
+  assert.throws(
+    () =>
+      parseAgent(
+        source.replace("tier: review", "tier: provider/model"),
+        "reviewer.md",
+      ),
+    /invalid tier/,
   );
 });
 
