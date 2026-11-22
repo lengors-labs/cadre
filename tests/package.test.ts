@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -44,6 +44,9 @@ test(
       "src/index.js",
       "src/definitions.js",
       "agents/placeholder.txt",
+      "agents/architect.md",
+      "agents/researcher.md",
+      "agents/reviewer.md",
       "skills/issue-workflow/SKILL.md",
       "skills/issue-workflow/scripts/normalize-index-modes.py",
     ]) {
@@ -64,24 +67,6 @@ test(
       ],
       { cwd: consumer, stdio: "pipe" },
     );
-    await writeFile(
-      join(
-        consumer,
-        "node_modules",
-        "@lengors-labs",
-        "cadre",
-        "agents",
-        "reviewer.md",
-      ),
-      `---
-mode: subagent
-tier: review
-permissions:
-  - { action: "*", resource: "*", effect: deny }
----
-Review changes.
-`,
-    );
     const script = `
     import plugin from '@lengors-labs/cadre';
     import assert from 'node:assert/strict';
@@ -93,10 +78,13 @@ Review changes.
       skill: { transform: async callback => callback({ get: () => undefined, add: skill => skills.push(skill) }) },
     });
     for (let i = 0; i < 2; i++) {
-      let agent;
-      transform({ get: () => undefined, update: (id, apply) => { assert.equal(id, 'reviewer'); agent = { request: {} }; apply(agent); } });
-      assert.deepEqual(agent.model, { providerID: 'example', id: 'model', variant: 'high' });
-      assert.equal('tier' in agent, false);
+      const agents = {};
+      transform({ get: () => undefined, update: (id, apply) => { agents[id] = { request: {} }; apply(agents[id]); } });
+      assert.deepEqual(Object.keys(agents), ['architect', 'researcher', 'reviewer']);
+      assert.deepEqual(agents.reviewer.model, { providerID: 'example', id: 'model', variant: 'high' });
+      assert.equal(agents.architect.model, undefined);
+      assert.equal(agents.researcher.model, undefined);
+      for (const agent of Object.values(agents)) assert.equal('tier' in agent, false);
     }
     const warnings = [];
     console.warn = message => warnings.push(message);
@@ -104,14 +92,15 @@ Review changes.
       agent: { transform: async callback => { transform = callback; } },
       skill: { transform: async () => {} },
     });
-    assert.equal(warnings.length, 1);
-    assert.match(warnings[0], /reviewer.*review.*inheriting/);
+    assert.equal(warnings.length, 3);
+    assert.ok(warnings.some(message => /reviewer.*review.*inheriting/.test(message)));
     for (let i = 0; i < 2; i++) {
-      let agent;
-      transform({ get: () => undefined, update: (_id, apply) => { agent = { request: {} }; apply(agent); } });
-      assert.equal(agent.model, undefined);
+      const agents = [];
+      transform({ get: () => undefined, update: (_id, apply) => { const agent = { request: {} }; apply(agent); agents.push(agent); } });
+      assert.equal(agents.length, 3);
+      for (const agent of agents) assert.equal(agent.model, undefined);
     }
-    assert.equal(warnings.length, 1);
+    assert.equal(warnings.length, 3);
     assert.equal(plugin.id, 'cadre');
     assert.equal(skills[0].id, 'issue-workflow');
     assert.ok(skills[0].path.includes('node_modules'));
