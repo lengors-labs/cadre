@@ -76,6 +76,23 @@ generated from the same commits, and the version lives in the git tag — nothin
 written into a file. See the comment block at the end of [`.releaserc.js`](./.releaserc.js)
 for how a language template adds its own build tool to the pipeline.
 
+## Agent execution boundaries
+
+Cadre's Developer and Verifier can run shell commands. Their shell deny rules
+are guardrails against accidents, not security boundaries: commands run with
+the host user's authority, so use OS isolation and appropriately scoped
+credentials. Verifier has no edit tool and reports observed checks without
+fixing them, but shell commands can still write; this makes its PASS auditable,
+not proof that it cannot change files.
+
+Developer, Verifier, and DocWriter deny access to external directories. A
+deployment that needs an external worktree must configure a trusted worktree
+root and an `external_directory` exception for that root after the agent's deny
+rule. Global permissions precede agent rules, so a global allow alone does not
+override this denial; check the effective permission order before relying on
+the exception. Shell directory inference is best effort and does not replace
+OS isolation.
+
 ## Contributing
 
 Contributions are welcome! Please refer to our [Contribution Guidelines](https://github.com/lengors-labs/.github/blob/main/CONTRIBUTING.md)
