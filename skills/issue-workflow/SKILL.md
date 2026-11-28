@@ -109,10 +109,9 @@ Requires: codebase read/search and file write access.
   separately scoped work. For separately scoped work, proceed only when the user
   explicitly requested it. Re-read the issue: if it already covers that work,
   proceed; otherwise update the issue to describe the requested scope before
-  implementation, preserving its existing content and task states. Use a safe
-  update mechanism that does not overwrite concurrent edits; if unavailable,
-  leave the issue unchanged and report the blocker. Do not add agent-discovered
-  work without user authorization or mark newly described work complete early.
+  implementation, preserving its existing content and task states. Follow the
+  issue-body update procedure below. Do not add agent-discovered work without
+  user authorization or mark newly described work complete early.
 - Make the smallest coherent change that satisfies the issue, following
   `AGENTS.md` and existing project patterns. Work only in the validated isolated
   workspace; do not modify the primary checkout when a worktree is required.
@@ -130,6 +129,24 @@ Requires: command execution and codebase read/search.
 - Review the complete change against the issue and confirm it contains no
   unintended files or edits. Resolve failures before publishing, or report
   clearly when a check cannot be run.
+
+## Issue-body updates and concurrent edits
+
+Prefer an atomic conditional update against the exact issue version read. If no
+such operation is available, non-conditional issue-body replacement is allowed
+without confirmation only for additive checklist updates: mark fully completed
+tasks checked, never uncheck or alter tasks. Immediately before writing, re-read
+the whole issue and derive the targeted checkbox changes from that fresh body,
+preserving every other byte. Stop if the issue or task identification is
+ambiguous. After writing, re-read and verify both the targeted changes and that
+the untouched remainder matches; report the result and any mismatch. This is
+best-effort, not atomic: a concurrent edit between the final read and the write
+can be lost, even if the post-write check passes. State this limitation.
+
+If a conditional update is unavailable, stop and report the proposed edit for
+any other issue-body change, including adding requirements or changing acceptance
+criteria, and apply it only after the user approves that specific edit. Then
+re-read and verify the result. Never mark incomplete or uncertain tasks complete.
 
 ## 5. Commit and push
 
@@ -169,13 +186,9 @@ to agents that do not perform publishing.
   Confirm the push succeeded and the remote branch points to the expected commit.
   Do not expose credentials in output or switch identities without authorization.
 - After each successful commit, re-read the issue and update only the checkboxes
-  for tasks fully completed by that commit. Preserve the full issue body, task
-  text, and order; never tick partial or uncertain work. If a task appears
-  outdated or wrong, leave it unchanged and report that. Re-reading reduces stale
-  writes but does not prevent a race: use a supported atomic conditional update
-  against the version read, if available. If the host cannot guarantee the
-  update will not overwrite concurrent edits, leave the issue unchanged and
-  report the blocker; never claim an unchecked task is complete on the issue.
+  for tasks fully completed by that commit, following the issue-body update
+  procedure above. If a task appears outdated or wrong, leave it unchanged and
+  report that. Never claim an unchecked task is complete on the issue.
 
 ### File-mode fallback for unreliable filesystems
 
@@ -248,8 +261,13 @@ Requires: repository-host read/write access.
   the supported issue update mechanism because PRs are issues in the hosting API.
   If the needed operation is unavailable, report the exact fields left unset or
   mismatched.
-- Never use closing keywords in the PR title or body. Do not merge the PR or
-  close the issue.
+- Never use closing keywords in the PR title or body, and never close the issue.
+- Do not merge by default. Merge only when the user explicitly requests that
+  specific merge in the current session, and only after confirming the checks and
+  required reviews pass. Set `expectedHeadSha` to the reviewed head commit so the
+  merge cannot apply to different code; if the head has advanced, stop and
+  re-verify. Never merge a blocked, failing, or draft pull request, never merge to
+  resolve a conflict, and never treat auto-merge as a substitute.
 - Enable auto-merge by default through GitHub MCP unless `AGENTS.md`, the user's
   request, or another applicable instruction forbids it. Respect repository
   merge-method requirements and do not bypass checks, reviews, or branch rules.
