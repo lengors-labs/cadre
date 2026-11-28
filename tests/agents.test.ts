@@ -127,6 +127,105 @@ test("writing and executing agents have exact ordered capability boundaries", as
   );
 });
 
+test("GitManager has the exclusive enumerated GitHub write boundary", async () => {
+  const agents = await loadAgents(join(process.cwd(), "agents"));
+  const manager = agents.find((agent) => agent.id === "gitmanager");
+  assert.ok(manager);
+  const writes = [
+    "create_branch",
+    "create_pull_request",
+    "update_pull_request",
+    "merge_pull_request",
+    "add_issue_comment",
+    "issue_write",
+  ];
+  const reads = [
+    "get_me",
+    "list_issues",
+    "search_issues",
+    "issue_read",
+    "pull_request_read",
+    "list_repository_collaborators",
+    "search_users",
+  ];
+  assert.equal(manager.mode, "subagent");
+  assert.equal(manager.tier, "mechanical");
+  assert.equal(manager.model, undefined);
+  const shell = [
+    "git status*",
+    "git diff*",
+    "git ls-files*",
+    "git ls-remote*",
+    "git rev-parse*",
+    "git merge-base*",
+    "git log*",
+    "git show*",
+    "git remote -v*",
+    "git branch --show-current*",
+    "git branch -a*",
+    "git worktree list*",
+    "git config --get*",
+    "git config --path --get*",
+    "git config user.email",
+    "git var*",
+    "git add*",
+    "git update-index*",
+    "git commit*",
+    "git push*",
+  ].map((pattern) => rule("shell", pattern, "allow"));
+  assert.deepEqual(manager.permissions, [
+    ...common,
+    rule("skill", "issue-workflow", "allow"),
+    ...shell,
+    rule("shell", "git push*--force*", "deny"),
+    rule("shell", "git push* -f*", "deny"),
+    ...[...writes, ...reads].map((name) =>
+      rule(`github_${name}`, "*", "allow"),
+    ),
+  ]);
+  for (const agent of agents.filter((agent) => agent.id !== manager.id)) {
+    assert.ok(
+      agent.permissions.every(
+        (permission) =>
+          permission.effect !== "allow" ||
+          (!writes.some((name) => permission.action === `github_${name}`) &&
+            permission.action !== "github_*" &&
+            permission.action !== "*"),
+      ),
+      `${agent.id} must not allow GitHub writes`,
+    );
+  }
+  for (const name of ["push_files", "create_or_update_file"])
+    assert.ok(
+      agents.every((agent) =>
+        agent.permissions.every(
+          (permission) =>
+            permission.action !== `github_${name}` ||
+            permission.effect !== "allow",
+        ),
+      ),
+    );
+  const merge = rule("github_merge_pull_request", "*", "allow");
+  assert.ok(manager.permissions.some((p) => p.action === merge.action));
+  for (const agent of agents.filter((agent) => agent.id !== manager.id))
+    assert.ok(
+      !agent.permissions.some((p) => p.action === merge.action),
+      `${agent.id} must not merge pull requests`,
+    );
+  for (const phrase of [
+    "codemode: false",
+    "Never close issues",
+    "force-push",
+    "auto-merge",
+    "explicit author or committer",
+    "non-noreply",
+    "guardrails, not a security",
+    "Merging is instruction-only",
+    "`expectedHeadSha`",
+  ])
+    assert.ok(manager.system?.includes(phrase), phrase);
+});
+
 test("shipped tiers resolve consumer models or inherit with a warning", async () => {
   const agents = await loadAgents(join(process.cwd(), "agents"));
   const warnings: string[] = [];
@@ -140,15 +239,25 @@ test("shipped tiers resolve consumer models or inherit with a warning", async ()
         coding: "example/coding",
         verification: "example/verification",
         writing: "example/writing",
+        mechanical: "example/mechanical#off",
       },
     },
     (message) => warnings.push(message),
   );
   assert.deepEqual(
     mapped.map((agent) => agent.model?.id),
-    ["design", "coding", "writing", "research", "review", "verification"],
+    [
+      "design",
+      "coding",
+      "writing",
+      "mechanical",
+      "research",
+      "review",
+      "verification",
+    ],
   );
   assert.equal(mapped[0].model?.variant, "high");
+  assert.equal(mapped[3].model?.variant, "off");
   assert.equal(warnings.length, 0);
   const unmapped = resolveAgentTiers(agents, undefined, (message) =>
     warnings.push(message),

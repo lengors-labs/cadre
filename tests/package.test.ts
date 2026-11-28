@@ -47,6 +47,7 @@ test(
       "agents/architect.md",
       "agents/developer.md",
       "agents/docwriter.md",
+      "agents/gitmanager.md",
       "agents/researcher.md",
       "agents/reviewer.md",
       "agents/verifier.md",
@@ -83,7 +84,7 @@ test(
     for (let i = 0; i < 2; i++) {
       const agents = {};
       transform({ get: () => undefined, update: (id, apply) => { agents[id] = { request: {} }; apply(agents[id]); } });
-      assert.deepEqual(Object.keys(agents), ['architect', 'developer', 'docwriter', 'researcher', 'reviewer', 'verifier']);
+      assert.deepEqual(Object.keys(agents), ['architect', 'developer', 'docwriter', 'gitmanager', 'researcher', 'reviewer', 'verifier']);
       assert.deepEqual(agents.reviewer.model, { providerID: 'example', id: 'model', variant: 'high' });
       assert.equal(agents.architect.model, undefined);
       assert.equal(agents.researcher.model, undefined);
@@ -95,15 +96,15 @@ test(
       agent: { transform: async callback => { transform = callback; } },
       skill: { transform: async () => {} },
     });
-    assert.equal(warnings.length, 6);
+    assert.equal(warnings.length, 7);
     assert.ok(warnings.some(message => /reviewer.*review.*inheriting/.test(message)));
     for (let i = 0; i < 2; i++) {
       const agents = [];
       transform({ get: () => undefined, update: (_id, apply) => { const agent = { request: {} }; apply(agent); agents.push(agent); } });
-      assert.equal(agents.length, 6);
+      assert.equal(agents.length, 7);
       for (const agent of agents) assert.equal(agent.model, undefined);
     }
-    assert.equal(warnings.length, 6);
+    assert.equal(warnings.length, 7);
     assert.equal(plugin.id, 'cadre');
     assert.equal(skills[0].id, 'issue-workflow');
     assert.ok(skills[0].path.includes('node_modules'));

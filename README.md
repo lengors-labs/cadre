@@ -93,6 +93,25 @@ override this denial; check the effective permission order before relying on
 the exception. Shell directory inference is best effort and does not replace
 OS isolation.
 
+GitManager is the designated publisher: it stages, commits, and pushes with
+local Git and uses only its listed GitHub MCP tools for issue and PR operations.
+Configure the GitHub MCP server with `codemode: false` so those tools are exposed
+directly; this is a server setting under `mcp.servers.github`, not an agent
+frontmatter field. Its shell rules are guardrails, not a security boundary. Use
+OS isolation and a short-lived, repository-scoped credential inaccessible to
+every other agent. The agent definition does not provide that isolation itself.
+
+Merging is instruction-only: GitManager merges a pull request only when the
+handoff carries an explicit user instruction for that pull request, pinned to the
+reviewed head commit. It never enables auto-merge and never merges a blocked,
+failing or draft pull request.
+
+Map Cadre's `mechanical` tier to a model and variant with reasoning disabled in
+the consumer's provider/model configuration. Tier mapping selects a model; it
+does not itself disable reasoning, and an unmapped tier inherits the parent
+model. Configure the provider's actual supported option or non-reasoning variant
+and verify the effective setting rather than assuming a generic option works.
+
 ## Contributing
 
 Contributions are welcome! Please refer to our [Contribution Guidelines](https://github.com/lengors-labs/.github/blob/main/CONTRIBUTING.md)
